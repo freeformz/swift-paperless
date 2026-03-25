@@ -1,0 +1,145 @@
+//
+//  DocumentDetailModel.swift
+//  swift-paperless
+//
+//  Created by Paul Gessinger on 09.06.2024.
+//
+
+import DataModel
+import Foundation
+import Networking
+import PDFKit
+import SwiftUI
+import os
+
+enum DocumentDownloadState: Equatable {
+  case initial
+  case loading
+  case loaded(url: URL, document: PDFDocument)
+  case error
+
+  static func == (lhs: DocumentDownloadState, rhs: DocumentDownloadState) -> Bool {
+    switch (lhs, rhs) {
+    case (.initial, .initial), (.loading, .loading), (.loaded, .loaded), (.error, .error):
+      true
+    default:
+      false
+    }
+  }
+}
+
+@MainActor
+@Observable
+class DocumentDetailModel {
+  var download: DocumentDownloadState = .initial
+  var downloadProgress: Double = 0.0
+
+  @ObservationIgnored
+  var store: DocumentStore
+  @ObservationIgnored
+  var connection: Connection?
+
+  var document: Document
+
+  // Not fully used by the edit model yet (I think we're loading suggestions twice right now)
+  var suggestions: Suggestions?
+
+  var metadata: Metadata?
+
+  init(
+    store: DocumentStore, connection: Connection?, document: Document
+  ) {
+    self.store = store
+    self.connection = connection
+    self.document = document
+  }
+
+  func loadMetadata() async {
+    do {
+      metadata = try await store.repository.metadata(documentId: document.id)
+    } catch is CancellationError {
+    } catch {
+      Logger.shared.error("Error loading document metadata: \(error)")
+    }
+  }
+
+  func loadDocument() async {
+    async let updated = try await store.document(id: document.id)
+
+    switch download {
+    case .initial:
+      let setLoading = Task {
+        try? await Task.sleep(for: .seconds(0.5))
+        guard !Task.isCancelled else { return }
+        download = .loading
+      }
+      do {
+        guard
+          let url = try await store.repository.download(
+            documentID: document.id,
+            progress: { @Sendable value in
+              Task { @MainActor in
+                self.downloadProgress = value
+              }
+            })
+        else {
+          download = .error
+          break
+        }
+
+        guard let pdfDocument = PDFDocument(url: url) else {
+          download = .error
+          break
+        }
+
+        download = .loaded(url: url, document: pdfDocument)
+        setLoading.cancel()
+      } catch is CancellationError {
+      } catch {
+        download = .error
+        Logger.shared.error("Unable to get document downloaded for preview rendering: \(error)")
+        break
+      }
+
+    default:
+      break
+    }
+
+    do {
+      if let updated = try await updated {
+        document = updated
+      }
+    } catch {
+      Logger.shared.error("Error updating document with full perms for editing: \(error)")
+    }
+  }
+
+  func loadSuggestions() async throws {
+    suggestions = try await store.repository.suggestions(documentId: document.id)
+  }
+
+  var userCanChange: Bool {
+    store.userCanChange(document: document)
+  }
+
+  var userCanView: Bool {
+    store.userCanView(document: document)
+  }
+
+  var documentUrl: URL? {
+    guard let connection else { return nil }
+    return Endpoint.documentUrl(documentId: document.id).url(url: connection.url)
+  }
+
+  var deepLinks: (withServer: Route?, withoutServer: Route?) {
+    let withServer: Route? = (store.repository as? ApiRepository).flatMap {
+      let serverURL = $0.connection.url
+      guard let server = serverURL.stringDroppingScheme else { return nil }
+      return Route(action: .document(id: document.id, edit: false), server: server)
+    }
+
+    let withoutServer: Route? = Route(action: .document(id: document.id, edit: false))
+    return (withServer, withoutServer)
+
+  }
+}
