@@ -71,6 +71,20 @@ struct PreferencesView: View {
       } label: {
         Text(.settings(.filterConfiguration))
       }
+
+      Section {
+        Picker(selection: $appSettings.scannerFilterMode) {
+          ForEach(ScanFilterMode.allCases) { mode in
+            Text(mode.localizedName).tag(mode)
+          }
+        } label: {
+          Text(.settings(.defaultScanFilterMode))
+        }
+      } header: {
+        Text(.settings(.scanning))
+      } footer: {
+        Text(.settings(.defaultScanFilterModeDescription))
+      }
     }
     .navigationTitle(Text(.settings(.preferences)))
     .navigationBarTitleDisplayMode(.inline)

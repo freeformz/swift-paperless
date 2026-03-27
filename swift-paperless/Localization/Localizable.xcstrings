@@ -9627,6 +9627,17 @@
         }
       }
     },
+    "scanDocumentWithFilter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan document (%@)"
+          }
+        }
+      }
+    },
     "scrollToBottom" : {
       "extractionState" : "manual",
       "localizations" : {

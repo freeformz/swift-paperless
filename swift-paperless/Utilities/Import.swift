@@ -5,6 +5,8 @@
 //  Created by Paul Gessinger on 29.04.2024.
 //
 
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import Foundation
 import PDFKit
 import PhotosUI
@@ -64,6 +66,44 @@ func formattedImportFilename(prefix: String = "Scan") -> String {
     ))
 
   return "\(prefix) \(date)"
+}
+
+func applyFilter(_ filterMode: ScanFilterMode, to images: [UIImage]) -> [UIImage] {
+  guard filterMode != .original else { return images }
+
+  let context = CIContext()
+  return images.map { image in
+    guard let ciImage = CIImage(image: image) else { return image }
+
+    let filtered: CIImage
+    switch filterMode {
+    case .original:
+      return image
+    case .grayscale:
+      let filter = CIFilter.colorControls()
+      filter.inputImage = ciImage
+      filter.saturation = 0
+      guard let output = filter.outputImage else { return image }
+      filtered = output
+    case .blackAndWhite:
+      let filter = CIFilter.colorMonochrome()
+      filter.inputImage = ciImage
+      filter.color = CIColor(red: 0.5, green: 0.5, blue: 0.5)
+      filter.intensity = 1.0
+      guard let monoOutput = filter.outputImage else { return image }
+      let threshold = CIFilter.colorControls()
+      threshold.inputImage = monoOutput
+      threshold.contrast = 4.0
+      threshold.brightness = 0.1
+      guard let output = threshold.outputImage else { return image }
+      filtered = output
+    }
+
+    guard let cgImage = context.createCGImage(filtered, from: filtered.extent) else {
+      return image
+    }
+    return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+  }
 }
 
 func createPDFFrom(images: [UIImage]) throws -> URL {

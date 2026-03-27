@@ -56,6 +56,8 @@ struct DocumentView: View {
   @EnvironmentObject private var errorController: ErrorController
   @Environment(RouteManager.self) private var routeManager
 
+  @ObservedObject private var appSettings = AppSettings.shared
+
   @State private var filterModel = FilterModel()
 
   // MARK: State
@@ -66,6 +68,7 @@ struct DocumentView: View {
   @State private var isDocumentScannerAvailable = false
   @State private var isDataScannerAvailable = false
   @State private var showDocumentScanner = false
+  @State private var scanFilterMode: ScanFilterMode = AppSettings.shared.scannerFilterMode
   @State private var showCreateModal = false
 
   @StateObject private var importModel = DocumentImportModel()
@@ -124,6 +127,7 @@ struct DocumentView: View {
         routeManager.pendingRoute = nil
         Logger.shared.info("Opening document scanner from URL ")
         await clear()
+        scanFilterMode = appSettings.scannerFilterMode
         showDocumentScanner = true
       case .document(let id, _):
         Logger.shared.info("Opening document id \(id) from URL")
@@ -270,9 +274,14 @@ struct DocumentView: View {
         Group {
           if isDocumentScannerAvailable {
             Button {
+              scanFilterMode = appSettings.scannerFilterMode
               showDocumentScanner = true
             } label: {
-              Label(String(localized: .localizable(.scanDocument)), systemImage: "doc.viewfinder")
+              Label(
+                String(
+                  localized: .localizable(
+                    .scanDocumentWithFilter(appSettings.scannerFilterMode.localizedName))),
+                systemImage: "doc.viewfinder")
             }
           }
 
@@ -289,6 +298,19 @@ struct DocumentView: View {
             Label(String(localized: .localizable(.importPhotos)), systemImage: "photo")
           }
 
+          if isDocumentScannerAvailable {
+            Divider()
+            ForEach(ScanFilterMode.allCases.filter { $0 != appSettings.scannerFilterMode }) { mode in
+              Button {
+                scanFilterMode = mode
+                showDocumentScanner = true
+              } label: {
+                Label(
+                  String(localized: .localizable(.scanDocumentWithFilter(mode.localizedName))),
+                  systemImage: "doc.viewfinder")
+              }
+            }
+          }
         }
         .disabled(!store.permissions.test(.add, for: .document))
 
@@ -464,6 +486,7 @@ struct DocumentView: View {
       .fullScreenCover(isPresented: $showDocumentScanner) {
         DocumentScannerView(
           isPresented: $showDocumentScanner,
+          filterMode: scanFilterMode,
           onCompletion: { result in
             Task { @MainActor in
               switch result {

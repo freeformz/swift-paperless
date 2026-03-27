@@ -11,6 +11,25 @@ import Foundation
 import SwiftUI
 import os
 
+enum ScanFilterMode: String, Codable, CaseIterable, Identifiable {
+  case original
+  case grayscale
+  case blackAndWhite
+
+  var id: Self { self }
+
+  var localizedName: String {
+    switch self {
+    case .original:
+      String(localized: .settings(.scanFilterModeOriginal))
+    case .grayscale:
+      String(localized: .settings(.scanFilterModeGrayscale))
+    case .blackAndWhite:
+      String(localized: .settings(.scanFilterModeBlackAndWhite))
+    }
+  }
+}
+
 enum SettingsKeys: String {
   case documentDeleteConfirmation
   case enableBiometricAppLock
@@ -22,6 +41,8 @@ enum SettingsKeys: String {
   case editingUserInterfaceExperiment
 
   case showDocumentDetailPropertyBar
+
+  case scannerFilterMode
 }
 
 extension PublishedUserDefaultsBacked {
@@ -113,6 +134,9 @@ class AppSettings: ObservableObject {
 
   @PublishedUserDefaultsBacked(.showDocumentDetailPropertyBar)
   var showDocumentDetailPropertyBar: Bool = true
+
+  @PublishedUserDefaultsBacked(.scannerFilterMode)
+  var scannerFilterMode: ScanFilterMode = .original
 
   var lastAppVersion: AppVersion?
   @UserDefaultsBacked(appVersionKey)

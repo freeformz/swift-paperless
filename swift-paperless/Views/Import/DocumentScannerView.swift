@@ -13,6 +13,7 @@ private func isCameraViewControllerSupported() async -> Bool {
 
 struct DocumentScannerView: UIViewControllerRepresentable {
   @Binding var isPresented: Bool
+  let filterMode: ScanFilterMode
   let onCompletion: @Sendable (_ result: Result<[URL], any Error>) -> Void
 
   @MainActor
@@ -24,13 +25,16 @@ struct DocumentScannerView: UIViewControllerRepresentable {
 
   class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
     @Binding var isPresented: Bool
+    let filterMode: ScanFilterMode
     let completionHandler: @Sendable (_ result: Result<[URL], any Error>) -> Void
 
     init(
       isPresented: Binding<Bool>,
+      filterMode: ScanFilterMode,
       onCompletion: @Sendable @escaping (_ result: Result<[URL], any Error>) -> Void
     ) {
       _isPresented = isPresented
+      self.filterMode = filterMode
       completionHandler = onCompletion
     }
 
@@ -41,7 +45,8 @@ struct DocumentScannerView: UIViewControllerRepresentable {
       do {
         Logger.shared.notice("Attempt to make PDF")
 
-        let images = (0..<scan.pageCount).map { scan.imageOfPage(at: $0) }
+        let rawImages = (0..<scan.pageCount).map { scan.imageOfPage(at: $0) }
+        let images = applyFilter(filterMode, to: rawImages)
         let url = try createPDFFrom(images: images)
 
         isPresented = false
@@ -75,7 +80,7 @@ struct DocumentScannerView: UIViewControllerRepresentable {
   }
 
   func makeCoordinator() -> Coordinator {
-    Coordinator(isPresented: $isPresented, onCompletion: onCompletion)
+    Coordinator(isPresented: $isPresented, filterMode: filterMode, onCompletion: onCompletion)
   }
 
   func makeUIViewController(context: Context) -> some UIViewController {
